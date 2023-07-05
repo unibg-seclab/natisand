@@ -1,0 +1,15 @@
+[
+   {
+      "name": "libopen.so",
+      "type": "library",
+      "fs": true,
+      "ipc": true
+   },
+   {
+      "name": "libopen.so:open",
+      "type": "ffi",
+      "fs": {
+         "read": ["random"]
+      }
+   }
+]

@@ -1,5 +1,4 @@
 // Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
-
 use core::ptr::NonNull;
 use deno_core::anyhow::anyhow;
 use deno_core::error::generic_error;
@@ -48,6 +47,16 @@ const _: () = {
   assert!(size_of::<*const ()>() == 8);
 };
 
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("platform not supported");
+
+// Assert assumptions made in `prelude.h`
+const _: () = {
+  assert!(size_of::<c_char>() == 1);
+  assert!(size_of::<c_short>() == 2);
+  assert!(size_of::<*const ()>() == 8);
+};
+
 thread_local! {
   static LOCAL_ISOLATE_POINTER: RefCell<*const v8::Isolate> = RefCell::new(ptr::null());
 }
@@ -77,6 +86,13 @@ pub fn check_unstable2(state: &Rc<RefCell<OpState>>, api_name: &str) {
 pub trait FfiPermissions {
   fn check(&mut self, path: Option<&Path>) -> Result<(), AnyError>;
 }
+
+struct WrappedPointer {
+  fun_ptr: libffi::middle::CodePtr,
+  cif: libffi::middle::Cif,
+  call_args: Vec<Arg>,
+}
+unsafe impl Send for WrappedPointer {}
 
 #[derive(Clone)]
 struct Symbol {
@@ -142,7 +158,7 @@ impl DynamicLibraryResource {
     // which symbol wasn't exported. So we'll modify the error
     // message to include the name of symbol.
     //
-    // SAFETY: The obtained T symbol is the size of a pointer.
+    // SAFETY: The obtained T ffi_loadsymbol is the size of a pointer.
     match unsafe { self.lib.symbol::<*const c_void>(&symbol) } {
       Ok(value) => Ok(Ok(value)),
       Err(err) => Err(generic_error(format!(
@@ -188,6 +204,7 @@ pub fn init<P: FfiPermissions + 'static>(unstable: bool) -> Extension {
       op_ffi_read_i64::decl::<P>(),
       op_ffi_read_f32::decl::<P>(),
       op_ffi_read_f64::decl::<P>(),
+      nativeCall::decl(), //op_ffi_run_unprivileged::decl(),
       op_ffi_unsafe_callback_create::decl::<P>(),
       op_ffi_unsafe_callback_ref::decl(),
     ])
@@ -630,6 +647,22 @@ pub(crate) fn format_error(e: dlopen::Error, path: String) -> String {
   }
 }
 
+static mut DAEMONS: Vec<
+  std::collections::HashMap<
+    String,
+    (
+      std::sync::mpsc::Sender<Vec<NativeValue>>,
+      std::sync::mpsc::Receiver<
+        tokio::task::JoinHandle<Result<NativeValue, AnyError>>,
+      >,
+    ),
+  >,
+> = vec![];
+static mut POOL: Vec<std::collections::HashMap<usize, threadpool::ThreadPool>> =
+  vec![];
+static mut SHARED_RES: NativeValue = NativeValue { void_value: () };
+static BARRIER: spin::barrier::Barrier = spin::Barrier::new(2);
+
 #[op(v8)]
 fn op_ffi_load<FP, 'scope>(
   scope: &mut v8::HandleScope<'scope>,
@@ -640,11 +673,12 @@ where
   FP: FfiPermissions + 'static,
 {
   let path = args.path;
+  let lib_path = PathBuf::from(&path);
+  let lib_name = String::from(lib_path.file_name().unwrap().to_str().unwrap());
 
   check_unstable(state, "Deno.dlopen");
   let permissions = state.borrow_mut::<FP>();
-  permissions.check(Some(&PathBuf::from(&path)))?;
-
+  permissions.check(Some(&lib_path))?;
   let lib = Library::open(&path).map_err(|e| {
     dlopen::Error::OpeningLibraryError(std::io::Error::new(
       std::io::ErrorKind::Other,
@@ -656,8 +690,8 @@ where
     symbols: HashMap::new(),
   };
   let obj = v8::Object::new(scope);
-
   for (symbol_key, foreign_symbol) in args.symbols {
+    let loop_lib = String::from(lib_name.clone());
     match foreign_symbol {
       ForeignSymbol::ForeignStatic(_) => {
         // No-op: Statics will be handled separately and are not part of the Rust-side resource.
@@ -697,21 +731,63 @@ where
           result_type: foreign_fn.result,
           can_callback: foreign_fn.callback,
         });
-
+        let name = String::from(symbol_key.clone());
+        let pol_name = String::from(symbol_key.clone());
         resource.symbols.insert(symbol_key, sym.clone());
         match foreign_fn.non_blocking {
           // Generate functions for synchronous calls.
           Some(false) | None => {
-            let function = make_sync_fn(scope, sym);
+            let function = make_sync_fn(scope, sym, pol_name, loop_lib);
             obj.set(scope, func_key.into(), function.into());
           }
-          // This optimization is not yet supported for non-blocking calls.
-          _ => {}
+          Some(true) => {
+            // Prepare daemons for nonblocking functions
+            let (tx, rx) = std::sync::mpsc::channel();
+            let (tx1, rx1) = std::sync::mpsc::channel();
+            let (t, r) = std::sync::mpsc::channel();
+            // This thread is the aemon, there is one thread for each policy
+            std::thread::spawn(move || {
+              let sym: Symbol = r.recv().unwrap();
+              // It locks itself and any children will inherit the policy
+              sandbox::apply(&pol_name, Some(&loop_lib));
+              let rt = tokio::runtime::Runtime::new().unwrap();
+              loop {
+                // Wait for the arguments of the FFI
+                let call_args = rx.recv().unwrap();
+                let (t, r) = std::sync::mpsc::channel();
+                // Call the FFI in a new Tokio thread
+                let handler = rt.spawn_blocking(move || {
+                  let sym: Symbol = r.recv().unwrap();
+                  let Symbol {
+                    cif,
+                    ptr,
+                    parameter_types,
+                    result_type,
+                    ..
+                  } = sym.clone();
+                  ffi_call(call_args, &cif, ptr, &parameter_types, result_type)
+                });
+                // Probably sending two times the symbol is not necessary
+                t.send(sym.clone()).unwrap();
+                // Send the handler to the caller
+                tx1.send(handler).unwrap();
+              }
+            });
+
+            // Send the symbol to the daemon, so it can share it with child threads
+            t.send(*sym.clone()).unwrap();
+            unsafe {
+              if DAEMONS.is_empty() {
+                DAEMONS.push(std::collections::HashMap::new());
+              }
+              // Store communication channel with the deamon
+              DAEMONS[0].insert(name, (tx, rx1));
+            }
+          }
         };
       }
     }
   }
-
   let rid = state.resource_table.add(resource);
   Ok((
     rid,
@@ -743,7 +819,37 @@ fn is_i64(rv: NativeType) -> bool {
 fn make_sync_fn<'s>(
   scope: &mut v8::HandleScope<'s>,
   sym: Box<Symbol>,
+  name: String,
+  lib_name: String,
 ) -> v8::Local<'s, v8::Function> {
+  let is_sandboxed;
+  let handle = std::thread::spawn(move || {
+    let is_sandboxed = sandbox::apply(&name, Some(&lib_name));
+    (threadpool::ThreadPool::new(1), is_sandboxed)
+  });
+  unsafe {
+    if POOL.is_empty() {
+      POOL.push(std::collections::HashMap::new());
+      let handle = std::thread::spawn(move || {
+        let is_sandboxed = sandbox::apply(
+          &String::from("unpriv"),
+          Some(&String::from("unpriv")),
+        );
+        (threadpool::ThreadPool::new(1), is_sandboxed)
+      });
+      let handle_res = handle.join().unwrap();
+      let pool = handle_res.0;
+      POOL[0].insert(0, pool);
+    }
+    // Put the function pointer in the map only if a sandbox is required
+    let handle_res = handle.join().unwrap();
+    let pool = handle_res.0;
+    is_sandboxed = handle_res.1;
+    if is_sandboxed {
+      POOL[0].insert(sym.clone().ptr.as_ptr() as *const _ as usize, pool);
+    }
+  }
+
   let sym = Box::leak(sym);
   let builder = v8::FunctionTemplate::builder(
     |scope: &mut v8::HandleScope,
@@ -758,6 +864,7 @@ fn make_sync_fn<'s>(
         true => Some(args.get(symbol.parameter_types.len() as i32)),
         false => None,
       };
+
       match ffi_call_sync(scope, args, symbol) {
         Ok(result) => {
           match needs_unwrap {
@@ -805,7 +912,7 @@ fn make_sync_fn<'s>(
 
   let mut fast_call_alloc = None;
 
-  let func = if fast_call::is_compatible(sym) {
+  let func = if fast_call::is_compatible(sym) && !is_sandboxed {
     let trampoline = fast_call::compile_trampoline(sym);
     let func = builder.build_fast(
       scope,
@@ -1179,7 +1286,6 @@ where
   } = symbol;
   let mut ffi_args: Vec<NativeValue> =
     Vec::with_capacity(parameter_types.len());
-
   for (index, native_type) in parameter_types.iter().enumerate() {
     let value = args.get(index as i32);
     match native_type {
@@ -1239,56 +1345,263 @@ where
   let call_args: Vec<Arg> = ffi_args.iter().map(Arg::new).collect();
   // SAFETY: types in the `Cif` match the actual calling convention and
   // types of symbol.
-  unsafe {
-    Ok(match result_type {
-      NativeType::Void => NativeValue {
-        void_value: cif.call::<()>(*fun_ptr, &call_args),
-      },
-      NativeType::Bool => NativeValue {
-        bool_value: cif.call::<bool>(*fun_ptr, &call_args),
-      },
-      NativeType::U8 => NativeValue {
-        u8_value: cif.call::<u8>(*fun_ptr, &call_args),
-      },
-      NativeType::I8 => NativeValue {
-        i8_value: cif.call::<i8>(*fun_ptr, &call_args),
-      },
-      NativeType::U16 => NativeValue {
-        u16_value: cif.call::<u16>(*fun_ptr, &call_args),
-      },
-      NativeType::I16 => NativeValue {
-        i16_value: cif.call::<i16>(*fun_ptr, &call_args),
-      },
-      NativeType::U32 => NativeValue {
-        u32_value: cif.call::<u32>(*fun_ptr, &call_args),
-      },
-      NativeType::I32 => NativeValue {
-        i32_value: cif.call::<i32>(*fun_ptr, &call_args),
-      },
-      NativeType::U64 => NativeValue {
-        u64_value: cif.call::<u64>(*fun_ptr, &call_args),
-      },
-      NativeType::I64 => NativeValue {
-        i64_value: cif.call::<i64>(*fun_ptr, &call_args),
-      },
-      NativeType::USize => NativeValue {
-        usize_value: cif.call::<usize>(*fun_ptr, &call_args),
-      },
-      NativeType::ISize => NativeValue {
-        isize_value: cif.call::<isize>(*fun_ptr, &call_args),
-      },
-      NativeType::F32 => NativeValue {
-        f32_value: cif.call::<f32>(*fun_ptr, &call_args),
-      },
-      NativeType::F64 => NativeValue {
-        f64_value: cif.call::<f64>(*fun_ptr, &call_args),
-      },
-      NativeType::Pointer | NativeType::Function | NativeType::Buffer => {
-        NativeValue {
-          pointer: cif.call::<*const u8>(*fun_ptr, &call_args),
+  let pool_opt =
+    unsafe { POOL[0].get(&(fun_ptr.as_ptr() as *const _ as usize)) };
+  if pool_opt.is_some() {
+    // Wrap the calling arguments to be executed in a thread
+    let wrapper = spin::RwLock::new(WrappedPointer {
+      fun_ptr: *fun_ptr,
+      cif: cif.clone(),
+      call_args: call_args,
+    });
+
+    let pool = pool_opt.unwrap();
+    unsafe {
+      Ok(match result_type {
+        NativeType::Void => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            wp.cif.call::<()>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue { void_value: () }
         }
-      }
-    })
+        NativeType::Bool => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.bool_value =
+              wp.cif.call::<bool>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            bool_value: SHARED_RES.bool_value,
+          }
+        }
+        NativeType::U8 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.u8_value = wp.cif.call::<u8>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            u8_value: SHARED_RES.u8_value,
+          }
+        }
+        NativeType::I8 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.i8_value = wp.cif.call::<i8>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            i8_value: SHARED_RES.i8_value,
+          }
+        }
+        NativeType::U16 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.u16_value =
+              wp.cif.call::<u16>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            u16_value: SHARED_RES.u16_value,
+          }
+        }
+        NativeType::I16 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.i16_value =
+              wp.cif.call::<i16>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            i16_value: SHARED_RES.i16_value,
+          }
+        }
+        NativeType::U32 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.u32_value =
+              wp.cif.call::<u32>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            u32_value: SHARED_RES.u32_value,
+          }
+        }
+        NativeType::I32 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.i32_value =
+              wp.cif.call::<i32>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            i32_value: SHARED_RES.i32_value,
+          }
+        }
+        NativeType::U64 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.u64_value =
+              wp.cif.call::<u64>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            u64_value: SHARED_RES.u64_value,
+          }
+        }
+        NativeType::I64 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.i64_value =
+              wp.cif.call::<i64>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            i64_value: SHARED_RES.i64_value,
+          }
+        }
+        NativeType::USize => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.usize_value =
+              wp.cif.call::<usize>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            usize_value: SHARED_RES.usize_value,
+          }
+        }
+        NativeType::ISize => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.isize_value =
+              wp.cif.call::<isize>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            isize_value: SHARED_RES.isize_value,
+          }
+        }
+        NativeType::F32 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.f32_value =
+              wp.cif.call::<f32>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            f32_value: SHARED_RES.f32_value,
+          }
+        }
+        NativeType::F64 => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.f64_value =
+              wp.cif.call::<f64>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            f64_value: SHARED_RES.f64_value,
+          }
+        }
+        NativeType::Pointer | NativeType::Function | NativeType::Buffer => {
+          pool.execute(move || {
+            let wp = wrapper.read();
+            SHARED_RES.pointer =
+              wp.cif.call::<*const u8>(wp.fun_ptr, &wp.call_args);
+            BARRIER.wait();
+          });
+
+          BARRIER.wait();
+          NativeValue {
+            pointer: SHARED_RES.pointer,
+          }
+        }
+      })
+    }
+  } else {
+    unsafe {
+      Ok(match result_type {
+        NativeType::Void => NativeValue {
+          void_value: cif.call::<()>(*fun_ptr, &call_args),
+        },
+        NativeType::Bool => NativeValue {
+          bool_value: cif.call::<bool>(*fun_ptr, &call_args),
+        },
+        NativeType::U8 => NativeValue {
+          u8_value: cif.call::<u8>(*fun_ptr, &call_args),
+        },
+        NativeType::I8 => NativeValue {
+          i8_value: cif.call::<i8>(*fun_ptr, &call_args),
+        },
+        NativeType::U16 => NativeValue {
+          u16_value: cif.call::<u16>(*fun_ptr, &call_args),
+        },
+        NativeType::I16 => NativeValue {
+          i16_value: cif.call::<i16>(*fun_ptr, &call_args),
+        },
+        NativeType::U32 => NativeValue {
+          u32_value: cif.call::<u32>(*fun_ptr, &call_args),
+        },
+        NativeType::I32 => NativeValue {
+          i32_value: cif.call::<i32>(*fun_ptr, &call_args),
+        },
+        NativeType::U64 => NativeValue {
+          u64_value: cif.call::<u64>(*fun_ptr, &call_args),
+        },
+        NativeType::I64 => NativeValue {
+          i64_value: cif.call::<i64>(*fun_ptr, &call_args),
+        },
+        NativeType::USize => NativeValue {
+          usize_value: cif.call::<usize>(*fun_ptr, &call_args),
+        },
+        NativeType::ISize => NativeValue {
+          isize_value: cif.call::<isize>(*fun_ptr, &call_args),
+        },
+        NativeType::F32 => NativeValue {
+          f32_value: cif.call::<f32>(*fun_ptr, &call_args),
+        },
+        NativeType::F64 => NativeValue {
+          f64_value: cif.call::<f64>(*fun_ptr, &call_args),
+        },
+        NativeType::Pointer | NativeType::Function | NativeType::Buffer => {
+          NativeValue {
+            pointer: cif.call::<*const u8>(*fun_ptr, &call_args),
+          }
+        }
+      })
+    }
   }
 }
 
@@ -2015,6 +2328,80 @@ fn op_ffi_get_static<'scope>(
   })
 }
 
+#[op(v8)]
+fn nativeCall<'scope>(
+  // fn op_ffi_run_unprivileged<'scope>(
+  scope: &mut v8::HandleScope<'scope>,
+  state: Rc<RefCell<deno_core::OpState>>,
+  function: serde_v8::Value<'scope>,
+  recv: serde_v8::Value<'scope>,
+  parameters: serde_v8::Value<'scope>,
+) -> serde_v8::Value<'scope> {
+  let locker: &mut v8::Locker =
+    unsafe { &mut **state.borrow_mut().borrow_mut::<*mut v8::Locker>() }; // get the Deno v8::Isolate
+  let mut isolate_handle = locker.get_isolate().thread_safe_handle(); // get a thread_safe handle for the sandboxed thread
+
+  // Get the address of the various elements to call the unprivileged zone
+  let function_addr = { &mut serde_v8::to_v8(scope, function).unwrap() }
+    as *mut v8::Local<v8::Value> as usize; // function to call
+  let recv_addr = { &mut serde_v8::to_v8(scope, recv).unwrap() }
+    as *mut v8::Local<v8::Value> as usize; // receiver object/"this"
+  let parameters_addr = { &mut serde_v8::to_v8(scope, parameters).unwrap() }
+    as *mut v8::Local<v8::Value> as usize; // array of function arguments
+
+  // get current execution contest addr
+  let current_context = &mut scope.get_current_context();
+  let current_context_addr =
+    current_context as *mut v8::Local<v8::Context> as usize;
+
+  let unlocker = unsafe { v8::Unlocker::new(locker.get_isolate()) }; // unlock the Isolate to use it in another thread
+  unsafe { v8::HandleScope::set_is_unprivileged(true) }; // override the normal scope rewrite (we do not need to change the scope, since the code is the same)
+  let pool = unsafe { POOL[0].get(&0).unwrap() };
+  pool.execute(move || {
+    let mut locker = isolate_handle.lock(); // isolate locked in the thread
+    let ct =
+      unsafe { &*{ current_context_addr as *mut v8::Local<v8::Context> } }; // recover the running context from raw address
+    let scope = &mut v8::HandleScope::with_context(&mut locker, ct); // set the running context (when shared it is lost)
+
+    let function_val =
+      unsafe { *{ function_addr as *mut v8::Local<v8::Value> } };
+    let recv_val = unsafe { *{ recv_addr as *mut v8::Local<v8::Value> } };
+    let parameters_val =
+      unsafe { *{ parameters_addr as *mut v8::Local<v8::Value> } };
+
+    // Cast the various v8::Value to the actual v8 type needed
+    let function: v8::Local<v8::Function> = function_val.try_into().unwrap();
+    let parameters: v8::Local<v8::Array> = parameters_val.try_into().unwrap();
+
+    let mut parameters_vec: Vec<v8::Local<v8::Value>> = vec![]; // Unluckly we have to collect again the various function arguments
+    for i in 0..parameters.length() {
+      parameters_vec.push(parameters.get_index(scope, i).unwrap());
+    }
+    let key = v8::String::new(scope, "my_ret").unwrap();
+    let res_opt = function.call(scope, recv_val, &parameters_vec); // call the function
+    let res = match res_opt {
+      Some(r) => r,
+      None => v8::undefined(scope).into(),
+    };
+    ct.global(scope).set(scope, key.into(), res.into());
+    BARRIER.wait();
+  });
+
+  // Wait for thread to finish
+  BARRIER.wait();
+  drop(unlocker); // Lock again the v8::Isolate
+  unsafe { v8::HandleScope::set_is_unprivileged(false) }; // Restore normal Scope Handling
+
+  let key = v8::String::new(scope, "my_ret").unwrap();
+  let obj = current_context
+    .global(scope)
+    .get(scope, key.into())
+    .unwrap();
+
+  // Give the result to normal JS
+  serde_v8::from_v8(scope, obj).unwrap()
+}
+
 /// A non-blocking FFI call.
 #[op(v8)]
 fn op_ffi_call_nonblocking<'scope>(
@@ -2024,6 +2411,7 @@ fn op_ffi_call_nonblocking<'scope>(
   symbol: String,
   parameters: serde_v8::Value<'scope>,
 ) -> Result<impl Future<Output = Result<Value, AnyError>> + 'static, AnyError> {
+  let name = String::from(symbol.clone());
   let symbol = {
     let state = state.borrow();
     let resource = state.resource_table.get::<DynamicLibraryResource>(rid)?;
@@ -2033,25 +2421,20 @@ fn op_ffi_call_nonblocking<'scope>(
       .ok_or_else(|| type_error("Invalid FFI symbol name"))?
       .clone()
   };
-
   let call_args = ffi_parse_args(scope, parameters, &symbol.parameter_types)?;
-
   let result_type = symbol.result_type;
-  let join_handle = tokio::task::spawn_blocking(move || {
-    let Symbol {
-      cif,
-      ptr,
-      parameter_types,
-      result_type,
-      ..
-    } = symbol.clone();
-    ffi_call(call_args, &cif, ptr, &parameter_types, result_type)
-  });
-
+  let join_handle;
+  unsafe {
+    // send call args to daemon
+    let txrx = &DAEMONS[0].get(&name).unwrap();
+    txrx.0.send(call_args).unwrap();
+    // Receive the child thread handle
+    join_handle = txrx.1.recv().unwrap();
+  }
   Ok(async move {
     let result = join_handle
       .await
-      .map_err(|err| anyhow!("Nonblocking FFI call failed: {}", err))??;
+      .map_err(|err| anyhow!("Nonblocking FFI call failed: {:?}", err))??;
     // SAFETY: Same return type declared to libffi; trust user to have it right beyond that.
     Ok(unsafe { result.to_value(result_type) })
   })

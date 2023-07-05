@@ -64,7 +64,13 @@ mod not_docs {
 
     std::fs::write(&snapshot_path, compressed_snapshot_with_size).unwrap();
     println!("Snapshot written to: {} ", snapshot_path.display());
-  }
+ 
+    /* NOTE: we force rust to not run the destructor of the JS_RUNTIME
+    *  This is done to avoid crash at built time when creating snapshot
+    *  due to the memory leak in the Locker API
+    */
+    std::mem::forget(js_runtime);
+ }
 
   struct Permissions;
 

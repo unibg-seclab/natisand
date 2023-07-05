@@ -1,0 +1,171 @@
+[
+    {
+        "name": "GraphicsMagick (1:1)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-1-1.bpf"
+    },
+    {
+        "name": "GraphicsMagick (enhance)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "-enhance", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-enhance.bpf"
+    },
+    {
+        "name": "GraphicsMagick (resize)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "-resize", "50%", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-resize.bpf"
+    },
+    {
+        "name": "GraphicsMagick (rotate)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "-rotate", "90", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-rotate.bpf"
+    },
+    {
+        "name": "GraphicsMagick (sharpen)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "-sharpen", "0x2.0", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-sharpen.bpf"
+    },
+    {
+        "name": "GraphicsMagick (swirl)",
+        "command": [
+            "/usr/bin/gm", "convert",
+            "${inputFilePath}", "-swirl", "90", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/graphicsmagick-swirl.bpf"
+    },
+    {
+        "name": "ImageMagick (1:1)",
+        "command": [
+            "/usr/bin/convert", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-1-1.bpf"
+    },
+    {
+        "name": "ImageMagick (enhance)",
+        "command": [
+            "/usr/bin/convert",
+            "${inputFilePath}", "-enhance", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-enhance.bpf"
+    },
+    {
+        "name": "ImageMagick (resize)",
+        "command": [
+            "/usr/bin/convert",
+            "${inputFilePath}", "-resize", "50%", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-resize.bpf"
+    },
+    {
+        "name": "ImageMagick (rotate)",
+        "command": [
+            "/usr/bin/convert",
+            "${inputFilePath}", "-rotate", "90", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-rotate.bpf"
+    },
+    {
+        "name": "ImageMagick (sharpen)",
+        "command": [
+            "/usr/bin/convert",
+            "${inputFilePath}", "-sharpen", "0x2.0", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-sharpen.bpf"
+    },
+    {
+        "name": "ImageMagick (swirl)",
+        "command": [
+            "/usr/bin/convert",
+            "${inputFilePath}", "-swirl", "90", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/sample-image.jpg",
+        "seccomp": "../policies/subprocess/minijail/imagemagick-swirl.bpf"
+    },
+    {
+        "name": "Tesseract (auto)",
+        "command": [
+            "/usr/bin/tesseract",
+            "--oem", "1", "--psm", "3", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/ocr-image-samples/ocr-sample-7.JPG",
+        "seccomp": "../policies/subprocess/minijail/tesseract-auto.bpf"
+    },
+    {
+        "name": "Tesseract (column)",
+        "command": [
+            "/usr/bin/tesseract",
+            "--oem", "1", "--psm", "4", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/ocr-image-samples/ocr-sample-7.JPG",
+        "seccomp": "../policies/subprocess/minijail/tesseract-column.bpf"
+    },
+    {
+        "name": "Tesseract (sparse)",
+        "command": [
+            "/usr/bin/tesseract",
+            "--oem", "1", "--psm", "12", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/ocr-image-samples/ocr-sample-7.JPG",
+        "seccomp": "../policies/subprocess/minijail/tesseract-sparse.bpf"
+    },
+    {
+        "name": "Tesseract (uniform)",
+        "command": [
+            "/usr/bin/tesseract",
+            "--oem", "1", "--psm", "6", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/ocr-image-samples/ocr-sample-7.JPG",
+        "seccomp": "../policies/subprocess/minijail/tesseract-uniform.bpf"
+    },
+    {
+        "name": "Tesseract (word)",
+        "command": [
+            "/usr/bin/tesseract",
+            "--oem", "1", "--psm", "8", "${inputFilePath}", "${outputFilePath}"
+        ],
+        "dependencies": [ "/lib", "/lib64", "data/upload", "/usr" ],
+        "image": "data/ocr-sample-image.png",
+        "seccomp": "../policies/subprocess/minijail/tesseract-word.bpf"
+    }
+]

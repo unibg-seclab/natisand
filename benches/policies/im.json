@@ -1,0 +1,22 @@
+[
+    {
+        "name": "convert",
+        "type": "subprocess",
+        "fs": {
+            "read": [
+                ".",
+                "/lib",
+                "/lib64",
+                "/usr"
+            ],
+            "write": [
+                "."
+            ],
+            "exec": [
+                "/lib",
+                "/lib64",
+                "/usr/bin/convert"
+            ]
+        }
+    }
+]

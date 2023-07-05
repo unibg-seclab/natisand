@@ -9,4 +9,19 @@
 [submodule "test_util/wpt"]
 	path = test_util/wpt
 	url = https://github.com/web-platform-tests/wpt.git
-
+[submodule "ext/v8"]
+	path = ext/v8
+	url = git@github.com:unibg-seclab/rusty_v8_locker_API.git
+[submodule "benches/subprocess/minijail"]
+	path = benches/subprocess/minijail
+	url = https://github.com/google/minijail.git
+[submodule "benches/sqlite3"]
+	path = benches/sqlite3
+	url = https://github.com/denodrivers/sqlite3.git
+	ignore = dirty
+[submodule "benches/mysql-native"]
+	path = benches/mysql-native
+	url = git@github.com:denodrivers/mysql-native.git
+[submodule "benches/libxml/libxml2-xpath"]
+	path = benches/libxml/libxml2-xpath
+	url = git@github.com:yskszk63/libxml2-xpath.git

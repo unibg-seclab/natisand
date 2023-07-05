@@ -1,0 +1,31 @@
+workspace(name = "bench_sandbox2")
+
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+
+# Include the Sandboxed API dependency if it does not already exist in this
+# project. This ensures that this workspace plays well with other external
+# dependencies that might use Sandboxed API.
+maybe(
+    git_repository,
+    name = "com_google_sandboxed_api",
+    commit = "4c87556901a6f7fd6e587ef355009aa2fc0bc1e9",    # 2022-10-20
+    shallow_since = "1666273731 -0700",
+    remote = "https://github.com/google/sandboxed-api.git",
+)
+
+# From here on, Sandboxed API files are available. The statements below setup
+# transitive dependencies such as Abseil. Like above, those will only be
+# included if they don't already exist in the project.
+load(
+    "@com_google_sandboxed_api//sandboxed_api/bazel:sapi_deps.bzl",
+    "sapi_deps",
+)
+
+sapi_deps()
+
+# Need to separately setup Protobuf dependencies in order for the build rules
+# to work.
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()

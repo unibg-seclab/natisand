@@ -78,9 +78,9 @@ struct IsolateAllocations {
 /// by implementing an async function that takes a serde::Deserialize "control argument"
 /// and an optional zero copy buffer, each async Op is tied to a Promise in JavaScript.
 pub struct JsRuntime {
-  // This is an Option<OwnedIsolate> instead of just OwnedIsolate to workaround
+  // This is an Option<Locker> instead of just OwnedIsolate to workaround
   // a safety issue with SnapshotCreator. See JsRuntime::drop.
-  v8_isolate: Option<v8::OwnedIsolate>,
+  v8_isolate: Option<v8::Locker>,
   snapshot_creator: Option<v8::SnapshotCreator>,
   has_snapshotted: bool,
   built_from_snapshot: bool,
@@ -194,12 +194,11 @@ impl Drop for JsRuntime {
   fn drop(&mut self) {
     if let Some(creator) = self.snapshot_creator.take() {
       // TODO(ry): in rusty_v8, `SnapShotCreator::get_owned_isolate()` returns
-      // a `struct OwnedIsolate` which is not actually owned, hence the need
-      // here to leak the `OwnedIsolate` in order to avoid a double free and
+      // a `struct Locker` which is not actually owned, hence the need
+      // here to leak the `Locker` in order to avoid a double free and
       // the segfault that it causes.
       let v8_isolate = self.v8_isolate.take().unwrap();
       forget(v8_isolate);
-
       // TODO(ry) V8 has a strange assert which prevents a SnapshotCreator from
       // being deallocated if it hasn't created a snapshot yet.
       // https://github.com/v8/v8/blob/73212783fbd534fac76cc4b66aac899c13f71fc8/src/api.cc#L603
@@ -342,6 +341,18 @@ impl JsRuntime {
     // V8 takes ownership of external_references.
     let refs: &'static v8::ExternalReferences = Box::leak(Box::new(refs));
     let global_context;
+    
+    let align = std::mem::align_of::<usize>();
+    let layout = std::alloc::Layout::from_size_align(
+      std::mem::size_of::<*mut v8::Locker>(),
+      align,
+    )
+    .unwrap();
+    assert!(layout.size() > 0);
+    let isolate_ptr: *mut v8::Locker =
+      // SAFETY: we just asserted that layout has non-0 size.
+      unsafe { std::alloc::alloc(layout) as *mut _ };
+
     let (mut isolate, maybe_snapshot_creator) = if options.will_snapshot {
       // TODO(ry) Support loading snapshots before snapshotting.
       assert!(options.startup_snapshot.is_none());
@@ -349,9 +360,15 @@ impl JsRuntime {
       // SAFETY: `get_owned_isolate` is unsafe because it may only be called
       // once. This is the only place we call this function, so this call is
       // safe.
-      let isolate = unsafe { creator.get_owned_isolate() };
+      let isolate = creator.get_isolate();
       let mut isolate = JsRuntime::setup_isolate(isolate);
       {
+        // SAFETY: this is first use of `isolate_ptr` so we are sure we're
+        // not overwriting an existing pointer.
+        isolate = unsafe {
+          isolate_ptr.write(isolate);
+          isolate_ptr.read()
+        };
         let scope = &mut v8::HandleScope::new(&mut isolate);
         let context = bindings::initialize_context(scope, &op_ctxs, false);
         global_context = v8::Global::new(scope, context);
@@ -383,15 +400,23 @@ impl JsRuntime {
       let isolate = v8::Isolate::new(params);
       let mut isolate = JsRuntime::setup_isolate(isolate);
       {
+        // SAFETY: this is first use of `isolate_ptr` so we are sure we're
+        // not overwriting an existing pointer.
+        isolate = unsafe {
+          isolate_ptr.write(isolate);
+          isolate_ptr.read()
+        };
         let scope = &mut v8::HandleScope::new(&mut isolate);
         let context =
           bindings::initialize_context(scope, &op_ctxs, snapshot_loaded);
 
         global_context = v8::Global::new(scope, context);
       }
+
       (isolate, None)
     };
 
+    op_state.borrow_mut().put(isolate_ptr);
     let inspector =
       JsRuntimeInspector::new(&mut isolate, global_context.clone());
 
@@ -459,7 +484,7 @@ impl JsRuntime {
     self.global_realm().0
   }
 
-  pub fn v8_isolate(&mut self) -> &mut v8::OwnedIsolate {
+  pub fn v8_isolate(&mut self) -> &mut v8::Locker {
     self.v8_isolate.as_mut().unwrap()
   }
 
@@ -481,7 +506,7 @@ impl JsRuntime {
       // of this block, and 2. the HandleScope only has access to the isolate,
       // and nothing else we're accessing from self does.
       let scope = &mut v8::HandleScope::new(unsafe {
-        &mut *(self.v8_isolate() as *mut v8::OwnedIsolate)
+        &mut *(self.v8_isolate() as *mut v8::Locker)
       });
       let context = bindings::initialize_context(
         scope,
@@ -511,7 +536,7 @@ impl JsRuntime {
     self.global_realm().handle_scope(self.v8_isolate())
   }
 
-  fn setup_isolate(mut isolate: v8::OwnedIsolate) -> v8::OwnedIsolate {
+  fn setup_isolate(mut isolate: v8::Locker) -> v8::Locker {
     isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 10);
     isolate.set_promise_reject_callback(bindings::promise_reject_callback);
     isolate.set_host_initialize_import_meta_object_callback(

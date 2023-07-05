@@ -15,10 +15,14 @@ path = "lib.rs"
 
 [dependencies]
 deno_core = { version = "0.150.0", path = "../../core" }
+spin = "0.9.4"
+threadpool = "1.8.1"
 dlopen = "0.1.8"
 dynasmrt = "1.2.3"
 libffi = "3.0.0"
+sandbox = { path = "../sandbox" }
 serde = { version = "1.0.129", features = ["derive"] }
+thiserror = "1.0.31"
 tokio = { version = "1.17", features = ["full"] }
 
 [target.'cfg(windows)'.dependencies]

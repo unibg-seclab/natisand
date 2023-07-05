@@ -20,8 +20,20 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 use tokio::process::Command;
+
+static mut POOL: Vec<
+  std::collections::HashMap<
+    String,
+    (
+      std::sync::mpsc::Sender<tokio::process::Command>,
+      std::sync::mpsc::Receiver<tokio::process::Child>,
+    ),
+  >,
+> = vec![];
+static mut UNBOXED: Vec<std::collections::HashSet<String>> = vec![]; // Set of commands not running within a sandbox
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -173,11 +185,61 @@ fn op_run(state: &mut OpState, run_args: RunArgs) -> Result<RunInfo, AnyError> {
     super::check_unstable(state, "Deno.run.uid");
     c.uid(uid);
   }
+
+  let cmd_path = Path::new(args.get(0).unwrap());
+  let cmd_name = String::from(cmd_path.file_name().unwrap().to_str().unwrap());
+
+  unsafe {
+    if POOL.len() == 0 {
+      POOL.push(std::collections::HashMap::new());
+      UNBOXED.push(std::collections::HashSet::new());
+    }
+
+    if !POOL[0].contains_key(args.get(0).unwrap())
+      && !UNBOXED[0].contains(&cmd_name)
+    {
+      let thread_cmd_name =
+        String::from(cmd_path.file_name().unwrap().to_str().unwrap());
+
+      // communication channels with the caged thread
+      let (tx1, rx1) = std::sync::mpsc::channel::<tokio::process::Command>();
+      let (tx, rx) = std::sync::mpsc::channel();
+
+      let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+      let thread_barrier = std::sync::Arc::clone(&barrier);
+      // create the caged thread
+      std::thread::spawn(move || {
+        let is_sandboxed = sandbox::apply(&thread_cmd_name, None); // cage is set up
+        if !is_sandboxed {
+          UNBOXED[0].insert(thread_cmd_name);
+          thread_barrier.wait();
+          return;
+        }
+        let rt = tokio::runtime::Runtime::new().unwrap(); // tokio::process::Command::spawn must be called from a tokio runtime
+        let tx_rc = std::rc::Rc::new(&tx);
+
+        thread_barrier.wait();
+        // infinite loop
+        loop {
+          let tx_rc_loop = std::rc::Rc::clone(&tx_rc);
+          let mut c = rx1.recv().unwrap(); // wait for the next command call
+          let _guard = rt.enter(); // the tokio Runtime contest is exited when _guard is dropped
+          tx_rc_loop.send(c.spawn().unwrap()).unwrap(); // send back tokio::process::child
+        }
+      });
+      barrier.wait();
+      if !UNBOXED[0].contains(&cmd_name) {
+        // store communication channels
+        POOL[0].insert(String::from(args.get(0).unwrap()), (tx1, rx));
+      }
+    }
+  }
+
   #[cfg(unix)]
   // TODO(bartlomieju):
   #[allow(clippy::undocumented_unsafe_blocks)]
   unsafe {
-    c.pre_exec(|| {
+    c.pre_exec(move || {
       libc::setgroups(0, std::ptr::null());
       Ok(())
     });
@@ -203,8 +265,22 @@ fn op_run(state: &mut OpState, run_args: RunArgs) -> Result<RunInfo, AnyError> {
   // We want to kill child when it's closed
   c.kill_on_drop(true);
 
-  // Spawn the command.
-  let mut child = c.spawn()?;
+  let mut child = if unsafe { !UNBOXED[0].contains(&cmd_name) } {
+    // Communicate with the cage
+    let rx;
+    unsafe {
+      let channel = POOL[0].get(args.get(0).unwrap()).unwrap();
+      let tx = &channel.0;
+      tx.send(c).unwrap();
+      rx = &channel.1;
+    }
+
+    // Spawn the command.
+    rx.recv().unwrap()
+  } else {
+    c.spawn()?
+  };
+
   let pid = child.id();
 
   let stdin_rid = match child.stdin.take() {

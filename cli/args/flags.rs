@@ -290,6 +290,7 @@ pub struct Flags {
   pub allow_net: Option<Vec<String>>,
   pub allow_ffi: Option<Vec<PathBuf>>,
   pub allow_read: Option<Vec<PathBuf>>,
+  pub policy_file: Option<PathBuf>,
   pub allow_run: Option<Vec<String>>,
   pub allow_write: Option<Vec<PathBuf>>,
   pub ca_stores: Option<Vec<String>>,
@@ -470,6 +471,7 @@ impl Flags {
       allow_read: self.allow_read.clone(),
       allow_run: self.allow_run.clone(),
       allow_write: self.allow_write.clone(),
+      policy_file: self.policy_file.clone(),
       prompt: !self.no_prompt,
     }
   }
@@ -1808,6 +1810,13 @@ fn permission_args(app: Command) -> Command {
         }),
     )
     .arg(
+      Arg::new("native-sandbox")
+        .long("native-sandbox")
+        .takes_value(true)
+        .help("Policy file describing the native sandbox")
+        .value_hint(ValueHint::FilePath),
+    )
+    .arg(
       Arg::new("allow-run")
         .long("allow-run")
         .min_values(0)
@@ -2847,6 +2856,11 @@ fn permission_args_parse(flags: &mut Flags, matches: &clap::ArgMatches) {
       .collect();
     flags.allow_env = Some(env_allowlist);
     debug!("env allowlist: {:#?}", &flags.allow_env);
+  }
+ 
+  if let Some(policy_wl) = matches.value_of("native-sandbox") {
+    flags.policy_file = Some(PathBuf::from(policy_wl));
+    debug!("native-sandbox policy files: {:#?}", &flags.policy_file);
   }
 
   if let Some(run_wl) = matches.values_of("allow-run") {

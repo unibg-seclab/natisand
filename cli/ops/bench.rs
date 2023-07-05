@@ -18,6 +18,8 @@ use std::time;
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
+pub static mut BENCH_REGISTERED: u8 = 0;
+
 pub fn init(
   sender: UnboundedSender<BenchEvent>,
   filter: TestFilter,
@@ -144,6 +146,9 @@ fn op_register_bench(
   };
   let sender = state.borrow::<UnboundedSender<BenchEvent>>().clone();
   sender.send(BenchEvent::Register(description)).ok();
+  if !filtered_out {
+        unsafe { BENCH_REGISTERED += 1 };
+  }
   Ok(BenchRegisterResult { id, filtered_out })
 }
 

@@ -1,0 +1,19 @@
+[
+    {
+        "name": "libopusenc.so.0:ope_encoder_create_file",
+        "type": "ffi",
+        "fs": {
+            "read": [
+                "<PATH_TO_OPUS>/server_files"
+            ],
+            "write": [
+                "<PATH_TO_OPUS>/server_files"
+            ]
+        }
+    },
+    {
+       "name": "unpriv:unpriv",
+       "type": "ffi"
+    }
+]
+

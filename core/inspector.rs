@@ -148,7 +148,7 @@ impl JsRuntimeInspector {
   const CONTEXT_GROUP_ID: i32 = 1;
 
   pub fn new(
-    isolate: &mut v8::OwnedIsolate,
+    isolate: &mut v8::Locker,
     context: v8::Global<v8::Context>,
   ) -> Rc<RefCell<Self>> {
     let scope = &mut v8::HandleScope::new(isolate);

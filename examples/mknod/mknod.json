@@ -1,0 +1,11 @@
+[{
+   "name": "libmknod.so:my_mknod",
+   "type": "ffi",
+   "fs": {
+      "read": ["random"],
+      "write": ["."]
+   },
+   "ipc": {
+      "fifo": true 
+   }
+}]

@@ -1,0 +1,10 @@
+[
+    {
+        "name": "libxml2.so",
+        "type": "library"
+    },
+    {
+        "name": "libc.so.6",
+        "type": "library"
+    }
+]

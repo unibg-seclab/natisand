@@ -1,0 +1,25 @@
+load("@com_google_sandboxed_api//sandboxed_api/bazel:build_defs.bzl", "sapi_platform_copts")
+
+licenses(["notice"])
+
+# Executor
+cc_binary(
+    name = "sandboxer",
+    srcs = ["sandboxer.cc"],
+    copts = sapi_platform_copts(),
+    tags = ["no_qemu_user_mode"],
+    deps = [
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/log:globals",
+        "@com_google_absl//absl/log:initialize",
+        "@com_google_sandboxed_api//sandboxed_api/sandbox2",
+    ],
+)
+
+sh_test(
+    name = "sandboxer_test",
+    srcs = ["sandboxer_test.sh"],
+    data = [":sandboxer"],
+    tags = ["no_qemu_user_mode"],
+)

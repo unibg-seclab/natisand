@@ -1,0 +1,11 @@
+[
+    {
+        "name": "libsqlite3.so",
+        "type": "library",
+        "fs": {
+            "read": [
+                "<PATH_TO_NORTHWIND>"
+            ]
+        }
+    }
+]

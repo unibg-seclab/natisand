@@ -1,0 +1,14 @@
+
+[
+      {
+         "name": "libsqlite3.so:sqlite3_open_v2",
+         "type": "ffi",
+         "fs": { "read": [ "<PATH_TO_NORTHWIND>" ] }
+      },
+      {
+         "name": "unpriv:unpriv",
+         "type": "ffi"
+      }
+
+   ]
+

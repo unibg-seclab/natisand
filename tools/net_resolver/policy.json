@@ -1,0 +1,91 @@
+{
+    "policies": [
+	{
+	"name":"only_name",
+	"type": "subprocess",
+	"fs": {
+            "read": [
+		"/etc/ld.so.cache",
+		"/lib/x86_64-linux-gnu/libc.so.6",
+		"/lib64/ld-linux-x86-64.so.2",
+		"/usr/bin/sleep",
+		"/usr/lib/locale/locale-archive"
+            ],
+            "exec": [
+		"/lib64/ld-linux-x86-64.so.2",
+		"/usr/bin/sleep"
+            ]
+	},	
+	"ipc": true,
+	"net": [
+	    {
+	    "name": "www.amazon.it"
+	}
+	]
+    },
+	{
+	"name":"empty_ports",
+	"type": "ffi",
+	"fs": true,
+	"ipc": false,	
+	"net": [
+	    {
+	    "name": "www.amazon.it",
+	    "ports": []
+	}
+	]
+    },
+	{
+	"name":"with_ports",
+	"type": "library",
+	"fs": false,
+	"ipc": {
+	    "fifo": true,
+	    "socket": true
+	},	
+	"net": [
+	    {
+	    "name": "www.amazon.it",
+	    "ports": [1,2,3]
+	}
+	]
+    },
+	{
+	"name":"host_true",
+	"fs": {
+            "read": true,
+	    "write": false
+	},	
+	"net": [
+	    {
+	    "name": "www.amazon.it",
+	    "ports": true
+	}
+	]
+    },
+	{
+	"name":"host_false",
+	"net": [
+	    {
+	    "name": "www.amazon.it",
+	    "ports": false
+	}
+	]
+    },
+	{
+	"name":"empty_net",
+	"net": []
+    },
+	{
+	"name":"net_true",
+	"net": true
+    },
+	{
+	"name":"net_false",
+	"net": false
+    },
+	{
+	"name": "empty_policy"
+    }
+    ]
+}

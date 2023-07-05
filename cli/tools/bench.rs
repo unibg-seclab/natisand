@@ -12,6 +12,7 @@ use crate::fs_util::is_supported_bench_path;
 use crate::graph_util::contains_specifier;
 use crate::graph_util::graph_valid;
 use crate::ops;
+use crate::ops::bench::BENCH_REGISTERED;
 use crate::proc_state::ProcState;
 use crate::tools::test::format_test_error;
 use crate::tools::test::TestFilter;
@@ -35,6 +36,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::UnboundedSender;
+
+static mut BENCH_RUN: u8 = 0;
 
 #[derive(Debug, Clone, Deserialize)]
 struct BenchSpecifierOptions {
@@ -259,6 +262,13 @@ impl BenchReporter for ConsoleReporter {
             options
           )
         );
+
+        unsafe {
+                BENCH_RUN += 1;
+                if BENCH_RUN == BENCH_REGISTERED {
+                        std::process::exit(0x0100);
+                }
+        }
 
         self.group_measurements.push((desc, stats.clone()));
       }

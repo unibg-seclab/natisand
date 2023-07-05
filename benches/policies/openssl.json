@@ -1,0 +1,23 @@
+[
+    {
+        "name": "openssl",
+        "type": "subprocess",
+        "fs": {
+            "read": [
+                "/usr/bin/openssl",
+                "/usr/lib/ssl/openssl.cnf",
+                "/etc/ld.so.cache",
+                "/lib/x86_64-linux-gnu/libssl.so.3",
+                "/lib/x86_64-linux-gnu/libcrypto.so.3",
+                "/lib/x86_64-linux-gnu/libc.so.6",
+                "/lib64/ld-linux-x86-64.so.2"
+            ],
+            "exec": [
+                "/usr/bin/openssl",
+                "/lib64/ld-linux-x86-64.so.2"
+            ]
+        },
+        "ipc": true,
+        "net": true
+    }
+]

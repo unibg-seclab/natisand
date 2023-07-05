@@ -1,104 +1,62 @@
-# Deno
+# NatiSand
 
-[![Build Status - Cirrus][]][Build status] [![Twitter handle][]][Twitter badge]
-[![Discord Chat](https://img.shields.io/discord/684898665143206084?logo=discord&style=social)](https://discord.gg/deno)
-
-<img align="right" src="https://deno.land/logo.svg" height="150px" alt="the deno mascot dinosaur standing in the rain">
-
-Deno is a _simple_, _modern_ and _secure_ runtime for **JavaScript** and
-**TypeScript** that uses V8 and is built in Rust.
-
-### Features
-
-- Secure by default. No file, network, or environment access, unless explicitly
-  enabled.
-- Supports TypeScript out of the box.
-- Ships only a single executable file.
-- [Built-in utilities.](https://deno.land/manual/tools#built-in-tooling)
-- Set of reviewed standard modules that are guaranteed to work with
-  [Deno](https://deno.land/std/).
-
-### Install
-
-Shell (Mac, Linux):
-
-```sh
-curl -fsSL https://deno.land/install.sh | sh
+This repository collects additional material associated with the paper:
+```
+NatiSand: Native Code Sandboxing for JavaScript Runtimes
 ```
 
-PowerShell (Windows):
+## Rationale
 
-```powershell
-irm https://deno.land/install.ps1 | iex
+Modern runtimes render JavaScript code in a secure and isolated
+environment, but when they execute binary programs and shared
+libraries, no isolation guarantees are provided. This is an important
+limitation, and it affects many popular runtimes including Node.js,
+Deno, and Bun.
+
+The paper proposes NatiSand, a component for JavaScript runtimes that
+leverages _Landlock_, _eBPF_, and _Seccomp_ to control the filesystem,
+Inter-Process Communication (IPC), and network resources available to
+binary programs and shared libraries.  NatiSand does not require
+changes to the application code and offers to the user an easy
+interface.  To demonstrate the effectiveness and efficiency of our
+approach we implemented NatiSand and integrated it into Deno, a
+modern, security-oriented JavaScript runtime. We also reproduce
+vulnerabilities affecting third-party code and show how they can be
+mitigated by NatiSand. In the experimental evaluation we analyze the
+overhead associated with our approach and compare it with state of the
+art code sandboxing solutions.
+
+## Quickstart
+
+1. Initialize all submodules
+
+```bash
+git submodule update --init --recursive
+ ```
+ 
+2. Clone all submodules
+
+```bash
+git pull --recurse-submodules
 ```
 
-[Homebrew](https://formulae.brew.sh/formula/deno) (Mac):
+3. Make sure the dependencies required to build V8 are available
 
-```sh
-brew install deno
+4. Build the project
+
+```bash
+V8_FROM_SOURCE=1 cargo build --release
 ```
 
-[Chocolatey](https://chocolatey.org/packages/deno) (Windows):
-
-```powershell
-choco install deno
+5. Grant the required file capabilities to the deno executable (the
+   required capabilities vary based on the test and the kernel
+   version, the following is an example):
+   
+```bash
+sudo setcap cap_dac_override,cap_perfmon,cap_bpf=ep target/release/deno
 ```
 
-[Scoop](https://scoop.sh/) (Windows):
-
-```powershell
-scoop install deno
-```
-
-Build and install from source using [Cargo](https://crates.io/crates/deno):
-
-```sh
-cargo install deno --locked
-```
-
-See
-[deno_install](https://github.com/denoland/deno_install/blob/master/README.md)
-and [releases](https://github.com/denoland/deno/releases) for other options.
-
-### Getting Started
-
-Try running a simple program:
-
-```sh
-deno run https://deno.land/std/examples/welcome.ts
-```
-
-Or a more complex one:
-
-```ts
-const listener = Deno.listen({ port: 8000 });
-console.log("http://localhost:8000/");
-
-for await (const conn of listener) {
-  serve(conn);
-}
-
-async function serve(conn: Deno.Conn) {
-  for await (const { respondWith } of Deno.serveHttp(conn)) {
-    respondWith(new Response("Hello world"));
-  }
-}
-```
-
-You can find a deeper introduction, examples, and environment setup guides in
-the [manual](https://deno.land/manual).
-
-The complete API reference is available at the runtime
-[documentation](https://doc.deno.land).
-
-### Contributing
-
-We appreciate your help!
-
-To contribute, please read our
-[contributing instructions](https://deno.land/manual/contributing).
-
-[Build Status - Cirrus]: https://github.com/denoland/deno/workflows/ci/badge.svg?branch=main&event=push
-[Build status]: https://github.com/denoland/deno/actions
-[Twitter badge]: https://twitter.com/intent/follow?screen_name=deno_land
-[Twitter handle]: https://img.shields.io/twitter/follow/deno_land.svg?style=social&label=Follow
+6. Tests
+   + Ensure all additional dependencies are installed (e.g., native
+     libraries like `sqlite3`, binary programs like `GNU Tar`)
+   + Run the tests using `make` or the available Python scripts

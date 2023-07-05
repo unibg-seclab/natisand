@@ -17,6 +17,13 @@ gclient_config.py_entries
 /node_modules
 /tsconfig.json
 
+# seccomp-bpf filters
+ext/sandbox/src/ipc/filters.bin
+
+# bpf type definitions and skeletons
+ext/sandbox/src/*/bpf/vmlinux.h
+ext/sandbox/src/*/bpf/.output
+
 # compiled wasm files
 std/wasi/testdata/snapshot_preview1/
 
@@ -34,3 +41,98 @@ cli/tests/.test_coverage/
 # WPT generated cert files
 /tools/wpt/certs/index.txt*
 /tools/wpt/certs/serial*
+
+
+# text editor backup files
+# -*- mode: gitignore; -*-
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# vscode settings
+.vscode
+
+# Org-mode
+.org-id-locations
+*_archive
+
+# flymake-mode
+*_flymake.*
+
+# eshell files
+/eshell/history
+/eshell/lastdir
+
+# elpa packages
+/elpa/
+
+# reftex files
+*.rel
+
+# AUCTeX auto folder
+/auto/
+
+# cask packages
+.cask/
+dist/
+
+# Flycheck
+flycheck_*.el
+
+# server auth directory
+/server/
+
+# projectiles files
+.projectile
+
+# directory configuration
+.dir-locals.el
+
+# Ignore all bazel-* symlinks. There is no full list since this can change
+# based on the name of the directory bazel is cloned into.
+bazel-*
+
+# Test generation output
+benches/**/tests
+benches/**/server_tests
+
+# Output of commands run during policy generation
+benches/**/native-sandbox-policy-intermediates
+benches/**/output-*
+
+# Policy generation output
+benches/**/*.bpf
+benches/**/*.policy
+benches/**/*.strace
+benches/**/coreutils.json
+benches/**/image-processing.json
+
+# wrk benchmark configurations
+benches/**/wrk/configs
+
+# Deno v1.25.2
+benches/**/deno
+
+# Sample data
+benches/**/*.csv
+benches/**/*.gz
+benches/**/*.jpg
+benches/**/*.JPG
+benches/**/*.png
+benches/**/*.xml
+benches/**/*.zip
+
+# Minijail root directory
+benches/**/minijail-root
+
+# Server pid and upload directory
+benches/**/.server.pid
+benches/**/upload
+
+# paper
+paper

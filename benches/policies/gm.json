@@ -1,0 +1,23 @@
+[
+    {
+        "name": "gm",
+        "type": "subprocess",
+        "fs": {
+            "read": [
+                ".",
+                "/lib",
+                "/lib64",
+                "/usr"
+            ],
+            "write": [
+                ".",
+                "/tmp"
+            ],
+            "exec": [
+                "/lib",
+                "/lib64",
+                "/usr/bin/gm"
+            ]
+        }
+    }
+]

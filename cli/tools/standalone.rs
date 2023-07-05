@@ -258,6 +258,7 @@ pub fn compile_to_runtime_flags(
     allow_read: flags.allow_read.clone(),
     allow_run: flags.allow_run.clone(),
     allow_write: flags.allow_write.clone(),
+    policy_file: flags.policy_file.clone(),
     ca_stores: flags.ca_stores.clone(),
     ca_file: flags.ca_file.clone(),
     cache_blocklist: vec![],

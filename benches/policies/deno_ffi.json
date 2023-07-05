@@ -1,0 +1,7 @@
+[
+    {
+        "name": "libtest_ffi.so",
+        "type": "library",
+        "fs": false
+    }
+]

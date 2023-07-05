@@ -1,0 +1,21 @@
+[
+    {
+        "name": "libpng16.so",
+        "type": "library"
+    },
+    {
+    	"name": "libc.so.6:fopen",
+	"type": "ffi",
+	"fs": { 
+		"read": [
+			   "<PATH_TO_BENCH>/libpng/input.png",
+			   "<PATH_TO_BENCH>/libpng/out.png"
+			],
+		"write": [ "<PATH_TO_BENCH>/libpng/out.png" ]
+	      }
+    },
+    {
+	"name": "libc.so.6",
+	"type": "library"
+    }
+]

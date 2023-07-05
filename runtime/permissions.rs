@@ -28,6 +28,11 @@ use std::sync::atomic::AtomicBool;
 #[cfg(test)]
 use std::sync::atomic::Ordering;
 
+use sandbox::fs::{fs_policy_encoding, FS_POLICY};
+use sandbox::ipc::{ipc_policy_encoding, IPC_POLICY};
+use sandbox::net::{net_policy_encoding, NET_POLICY};
+use sandbox::policy::{get_policy, read_policy_from_file, Policy};
+
 const PERMISSION_EMOJI: &str = "⚠️";
 
 static DEBUG_LOG_ENABLED: Lazy<bool> =
@@ -1139,6 +1144,7 @@ pub struct Permissions {
   pub write: UnaryPermission<WriteDescriptor>,
   pub net: UnaryPermission<NetDescriptor>,
   pub env: UnaryPermission<EnvDescriptor>,
+  pub policy: String,
   pub run: UnaryPermission<RunDescriptor>,
   pub ffi: UnaryPermission<FfiDescriptor>,
   pub hrtime: UnitPermission,
@@ -1154,6 +1160,7 @@ impl Default for Permissions {
       run: Permissions::new_run(&None, false).unwrap(),
       ffi: Permissions::new_ffi(&None, false).unwrap(),
       hrtime: Permissions::new_hrtime(false),
+      policy: Permissions::new_policy(&None),
     }
   }
 }
@@ -1165,6 +1172,7 @@ pub struct PermissionsOptions {
   pub allow_net: Option<Vec<String>>,
   pub allow_ffi: Option<Vec<PathBuf>>,
   pub allow_read: Option<Vec<PathBuf>>,
+  pub policy_file: Option<PathBuf>,
   pub allow_run: Option<Vec<String>>,
   pub allow_write: Option<Vec<PathBuf>>,
   pub prompt: bool,
@@ -1285,6 +1293,38 @@ impl Permissions {
     )
   }
 
+  pub fn new_policy(state: &Option<PathBuf>) -> String {
+    if state.is_none() {
+      return String::from("Ok");
+    }
+
+    let path = state.as_ref().unwrap();
+    let policies: Vec<Policy> = read_policy_from_file(path)
+      .unwrap_or_else(|_| panic!("Error parsing {:?}", path));
+
+    // Store file system policies
+    let fs_policies = get_policy(&policies, fs_policy_encoding);
+    unsafe {
+      FS_POLICY.extend(fs_policies);
+    }
+
+    // Store ipc policies
+    let ipc_policies = get_policy(&policies, ipc_policy_encoding);
+    unsafe {
+      IPC_POLICY.extend(ipc_policies);
+    }
+
+    // Store net policies
+    let net_policies = get_policy(&policies, net_policy_encoding);
+    unsafe {
+      NET_POLICY.extend(net_policies);
+    }
+
+    sandbox::import_requirements().unwrap();
+
+    String::from("Ok")
+  }
+
   pub fn from_options(opts: &PermissionsOptions) -> Result<Self, AnyError> {
     Ok(Self {
       read: Permissions::new_read(&opts.allow_read, opts.prompt)?,
@@ -1292,6 +1332,7 @@ impl Permissions {
       net: Permissions::new_net(&opts.allow_net, opts.prompt)?,
       env: Permissions::new_env(&opts.allow_env, opts.prompt)?,
       run: Permissions::new_run(&opts.allow_run, opts.prompt)?,
+      policy: Permissions::new_policy(&opts.policy_file),
       ffi: Permissions::new_ffi(&opts.allow_ffi, opts.prompt)?,
       hrtime: Permissions::new_hrtime(opts.allow_hrtime),
     })
@@ -1306,6 +1347,7 @@ impl Permissions {
       run: Permissions::new_run(&Some(vec![]), false).unwrap(),
       ffi: Permissions::new_ffi(&Some(vec![]), false).unwrap(),
       hrtime: Permissions::new_hrtime(true),
+      policy: Permissions::new_policy(&None),
     }
   }
 
@@ -2472,6 +2514,7 @@ mod tests {
         state: PermissionState::Prompt,
         ..Permissions::new_hrtime(false)
       },
+      policy: Permissions::new_policy(&None),
     };
     #[rustfmt::skip]
     {
@@ -2592,6 +2635,7 @@ mod tests {
         state: PermissionState::Denied,
         ..Permissions::new_hrtime(false)
       },
+      policy: Permissions::new_policy(&None),
     };
     #[rustfmt::skip]
     {
@@ -2621,6 +2665,7 @@ mod tests {
       run: Permissions::new_run(&None, true).unwrap(),
       ffi: Permissions::new_ffi(&None, true).unwrap(),
       hrtime: Permissions::new_hrtime(false),
+      policy: Permissions::new_policy(&None),
     };
 
     let prompt_value = PERMISSION_PROMPT_STUB_VALUE_SETTER.lock();
@@ -2671,6 +2716,7 @@ mod tests {
       run: Permissions::new_run(&None, true).unwrap(),
       ffi: Permissions::new_ffi(&None, true).unwrap(),
       hrtime: Permissions::new_hrtime(false),
+      policy: Permissions::new_policy(&None),
     };
 
     let prompt_value = PERMISSION_PROMPT_STUB_VALUE_SETTER.lock();

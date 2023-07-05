@@ -1,0 +1,30 @@
+[
+	{
+        "name": "tar",
+	"type": "subprocess",
+	"fs": {
+        	"read": [
+            		"/usr/local/bin/tar",
+            		"/usr/lib/locale/locale-archive",
+            		"/usr/share/locale/locale.alias",
+            		"/usr/bin/gzip",
+            		"/lib/x86_64-linux-gnu/libc.so.6",
+            		"/lib64/ld-linux-x86-64.so.2",
+            		"/etc/ld.so.cache",
+            		"/home/ubuntu/Desktop/sci-ffi/mitigation/GNU_tar/input_archives/legitimate.tar",
+            		"/home/ubuntu/Desktop/sci-ffi/mitigation/GNU_tar/output_archives",
+			"/home/ubuntu/Desktop/sci-ffi/mitigation/GNU_tar/output_archives/legitimate_dep"
+        	],
+        	"write": [
+            		"/home/ubuntu/Desktop/sci-ffi/mitigation/GNU_tar/output_archives",
+			"/home/ubuntu/Desktop/sci-ffi/mitigation/GNU_tar/output_archives/legitimate_dep"
+        	],
+        	"exec": [
+            		"/usr/local/bin/tar",
+            		"/usr/bin/gzip",
+            		"/lib/x86_64-linux-gnu/libc.so.6",
+            		"/lib64/ld-linux-x86-64.so.2"
+        	]
+	}
+    }
+]

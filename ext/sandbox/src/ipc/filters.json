@@ -1,0 +1,208 @@
+{
+    "fifo": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "mknod",
+                "args": [
+                    {
+                        "index": 1,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 4096
+                        },
+                        "val": 4096,
+                        "comment": "S_IFIFO"
+                    }
+                ]
+            },
+            {
+                "syscall": "mknodat",
+                "args": [
+                    {
+                        "index": 2,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 4096
+                        },
+                        "val": 4096,
+                        "comment": "S_IFIFO"
+                    }
+                ]
+            }
+        ]
+    },
+    "message": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "mq_open"
+            },
+            {
+                "syscall": "mq_getsetattr"
+            },
+            {
+                "syscall": "mq_notify"
+            },
+            {
+                "syscall": "mq_timedreceive"
+            },
+            {
+                "syscall": "mq_timedsend"
+            },
+            {
+                "syscall": "mq_unlink"
+            },
+            {
+                "syscall": "msgctl"
+            },
+            {
+                "syscall": "msgget"
+            },
+            {
+                "syscall": "msgrcv"
+            },
+            {
+                "syscall": "msgsnd"
+            }
+        ]
+    },
+    "semaphore": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "semctl"
+            },
+            {
+                "syscall": "semget"
+            },
+            {
+                "syscall": "semop"
+            },
+            {
+                "syscall": "semtimedop"
+            }
+        ]
+    },
+    "shmem": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "shmat"
+            },
+            {
+                "syscall": "shmctl"
+            },
+            {
+                "syscall": "shmdt"
+            },
+            {
+                "syscall": "shmget"
+            },
+            {
+                "syscall": "mmap",
+                "args": [
+                    {
+                        "index": 3,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 33
+                        },
+                        "val": 1,
+                        "comment": "MAP_SHARED & !MAP_ANONYMOUS"
+                    }
+                ]
+            },
+            {
+                "syscall": "mmap",
+                "args": [
+                    {
+                        "index": 3,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 35
+                        },
+                        "val": 3,
+                        "comment": "MAP_SHARED_VALIDATE & !MAP_ANONYMOUS"
+                    }
+                ]
+            }
+        ]
+    },
+    "signal": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "kill"
+            },
+            {
+                "syscall": "pidfd_send_signal"
+            },
+            {
+                "syscall": "rt_sigqueueinfo"
+            },
+            {
+                "syscall": "rt_tgsigqueueinfo"
+            },
+            {
+                "syscall": "tgkill"
+            },
+            {
+                "syscall": "tkill"
+            }
+        ]
+    },
+    "socket": {
+        "mismatch_action": "allow",
+        "match_action": {
+            "errno": 1
+        },
+        "filter": [
+            {
+                "syscall": "mknod",
+                "args": [
+                    {
+                        "index": 1,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 49152
+                        },
+                        "val": 49152,
+                        "comment": "S_IFSOCK"
+                    }
+                ],
+                "comment": "create UNIX socket"
+            },
+            {
+                "syscall": "mknodat",
+                "args": [
+                    {
+                        "index": 2,
+                        "type": "dword",
+                        "op": {
+                            "masked_eq": 49152
+                        },
+                        "val": 49152,
+                        "comment": "S_IFSOCK"
+                    }
+                ],
+                "comment": "create UNIX socket"
+            }
+        ]
+    }
+}

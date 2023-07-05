@@ -1,0 +1,14 @@
+[
+    {
+        "name": "libopusenc.so.0",
+        "type": "library",
+        "fs": {
+            "read": [
+                "<PATH_TO_OPUS>/MyOut2.opus"
+            ],
+            "write": [
+                "<PATH_TO_OPUS>/MyOut2.opus"
+            ]
+        }
+    }
+]

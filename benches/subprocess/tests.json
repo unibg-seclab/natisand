@@ -1,0 +1,88 @@
+[
+    {
+        "command": ["/usr/bin/b2sum", "data/international-trade-data/output_csv_partial.csv"],
+        "seccomp": "../policies/subprocess/minijail/b2sum.bpf"
+    },
+    {
+        "command": ["/usr/bin/curl", "https://seclab.unibg.it"],
+        "seccomp": "../policies/subprocess/minijail/curl.bpf",
+        "dependencies": [
+            "/etc/resolv.conf",
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/lib/x86_64-linux-gnu"
+        ],
+        "native-sandbox": { "net": true }
+    },
+    {
+        "command": ["/usr/bin/cut", "-f2-4,6",  "-d,", "data/international-trade-data/output_csv_partial.csv"],
+        "seccomp": "../policies/subprocess/minijail/cut.bpf"
+    },
+    {
+        "command": ["/usr/bin/dd", "bs=4k", "count=1000", "if=/dev/zero", "of=/dev/null"],
+        "seccomp": "../policies/subprocess/minijail/dd.bpf"
+    },
+    {
+        "command": ["/usr/bin/dig", "seclab.unibg.it"],
+        "seccomp": "../policies/subprocess/minijail/dig.bpf",
+        "dependencies": ["/etc/resolv.conf"],
+        "native-sandbox": { "ipc": true, "net": true }
+    },
+    {
+        "command": ["/usr/bin/factor"],
+        "seccomp": "../policies/subprocess/minijail/factor.bpf",
+        "stdin": "data/numbers.csv"
+    },
+    {
+        "command": ["/usr/bin/head", "-n", "100000", "data/wikidatawiki-latest-pages-logging.xml"],
+        "seccomp": "../policies/subprocess/minijail/head.bpf"
+    },
+    {
+        "command": ["/usr/bin/join", "-t", ",", "data/international-trade-data/output_csv_small.csv", "data/international-trade-data/output_csv_small.csv"],
+        "seccomp": "../policies/subprocess/minijail/join.bpf"
+    },
+    {
+        "command": ["/usr/bin/ls", "-alR", "../../core"],
+        "seccomp": "../policies/subprocess/minijail/ls.bpf"
+    },
+    {
+        "command": ["/usr/bin/ping", "-c", "1", "seclab.unibg.it"],
+        "dependencies": ["/etc/resolv.conf", "/lib/x86_64-linux-gnu/libnss_dns.so.2"],
+        "seccomp": "../policies/subprocess/minijail/ping.bpf",
+        "native-sandbox": { "net": true }
+    },
+    {
+        "command": ["/usr/bin/seq", "100000"],
+        "seccomp": "../policies/subprocess/minijail/seq.bpf"
+    },
+    {
+        "command": ["/usr/bin/shuf", "-i", "0-10000"],
+        "seccomp": "../policies/subprocess/minijail/shuf.bpf"
+    },
+    {
+        "command": ["/usr/bin/sort", "data/numbers.csv"],
+        "seccomp": "../policies/subprocess/minijail/sort.bpf"
+    },
+    {
+        "command": ["/usr/bin/sum", "data/international-trade-data/output_csv_partial.csv"],
+        "seccomp": "../policies/subprocess/minijail/sum.bpf"
+    },
+    {
+        "command": ["/usr/bin/tac", "data/international-trade-data/output_csv_partial.csv"],
+        "seccomp": "../policies/subprocess/minijail/tac.bpf"
+    },
+    {
+        "command": ["/usr/bin/wc", "data/international-trade-data/output_csv_partial.csv"],
+        "seccomp": "../policies/subprocess/minijail/wc.bpf"
+    },
+    {
+        "command": ["/usr/bin/wget", "-O", "/dev/null", "https://seclab.unibg.it"],
+        "seccomp": "../policies/subprocess/minijail/wget.bpf",
+        "dependencies": [
+            "/etc/resolv.conf",
+            "/usr/lib/ssl/certs/4042bcee.0",
+            "/lib/x86_64-linux-gnu/libnss_dns.so.2",
+            "/lib/x86_64-linux-gnu/libresolv.so.2"
+        ],
+        "native-sandbox": { "net": true }
+    }
+]

@@ -1,0 +1,32 @@
+[
+	{
+         "name": "convert",
+	 "type": "subprocess",
+	 "fs": {
+         "read": [
+            "/dev/urandom",
+            "/tmp",
+            "/usr/local/bin/convert",
+            "/usr/local/lib",
+            "/usr/local/etc/ImageMagick-7",
+            "/usr/lib/locale/locale-archive",
+            "/etc/ld.so.cache",
+            "/etc/localtime",
+            "/lib/x86_64-linux-gnu",
+            "/sys/devices/system/cpu",
+            "/home/ubuntu/Desktop/sci-ffi/mitigation/ImageMagick/input_images",
+	    "/home/ubuntu/Desktop/sci-ffi/mitigation/ImageMagick/output_images",
+	    "/usr/lib"
+         ],
+         "write": [
+            "/tmp",
+            "/home/ubuntu/Desktop/sci-ffi/mitigation/ImageMagick/output_images"
+         ],
+         "exec": [
+            "/usr/local/bin/convert",
+	    "/usr/local/lib",
+	    "/lib/x86_64-linux-gnu"
+         ]
+	 }
+	}
+]

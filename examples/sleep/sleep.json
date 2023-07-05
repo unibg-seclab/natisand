@@ -1,0 +1,16 @@
+[{
+   "name": "sleep",
+   "fs": {
+      "read": [
+         "/etc/ld.so.cache",
+         "/lib/x86_64-linux-gnu/libc.so.6",
+         "/lib64/ld-linux-x86-64.so.2",
+         "/usr/bin/sleep",
+         "/usr/lib/locale/locale-archive"
+      ],
+      "exec": [
+         "/lib64/ld-linux-x86-64.so.2",
+         "/usr/bin/sleep"
+      ]
+   }
+}]

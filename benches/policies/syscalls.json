@@ -1,0 +1,50 @@
+[
+    {
+        "name": "libsyscalls.so:open_bench",
+        "type": "ffi",
+        "fs": {
+            "read": [
+                "<PATH_TO_BENCH>/empty"
+            ]
+        }
+    },
+    {
+        "name": "libsyscalls.so:listen_bench",
+        "type": "ffi",
+        "net": [
+            {
+                "ip": 2130706433,
+                "ports": [
+                    8080
+                ]
+            }
+        ]
+    },
+    {
+        "name": "libsyscalls.so:connect_bench",
+        "type": "ffi",
+        "net": [
+            {
+                "ip": 2130706433,
+                "ports": [
+                    8000
+                ]
+            }
+        ]
+    },
+    {
+        "name": "libsyscalls.so:fifo_bench",
+        "type": "ffi",
+        "fs": {
+            "read": [
+                "<PATH_TO_BENCH>/pipes"
+            ],
+            "write": [
+                "<PATH_TO_BENCH>/pipes"
+            ]
+        },
+        "ipc": {
+            "fifo": true
+        }
+    }
+]
