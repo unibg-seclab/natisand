@@ -1,9 +1,7 @@
 # NatiSand
 
 This repository collects additional material associated with the paper:
-```
-NatiSand: Native Code Sandboxing for JavaScript Runtimes
-```
+[NatiSand: Native Code Sandboxing for JavaScript Runtimes](https://cs.unibg.it/seclab-papers/2023/RAID/natisand.pdf)
 
 ## Rationale
 
